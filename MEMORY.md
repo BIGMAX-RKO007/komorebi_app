@@ -46,6 +46,9 @@
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
+- 2026-03-13 [clock-page]:
+  - 问题现象：需要一个简单但直观的 Flutter 页面来作为基础 UI 验证和后续交互实验的载体。
+  - 解决方案：在 `lib/main.dart` 中实现 `ClockPage`（StatefulWidget + Timer），作为应用首页（`MyApp` 的 `home`）；`ClockPage` 使用 `Timer.periodic` 每秒更新当前时间，在全黑背景上居中显示大号的 `HH:MM:SS` 和当天日期 `YYYY-MM-DD`，用于验证状态更新、重绘性能和基础 UI 管线工作正常。
 - 2026-03-13 [logging-test]:
   - 问题现象：需要验证新建的日志与异常处理体系在实际交互中的行为，尤其是 Rust 端出错时是否会同时在 Rust / Flutter 两侧日志中体现。
   - 解决方案：在 `MyApp` UI 中新增两个按钮，分别触发 `mayFail(false)`（成功路径）和 `mayFail(true)`（故意失败）；成功路径下仅输出一条 Flutter INFO 日志；故意失败时，Rust 侧通过 `log_from_rust(3, file!():line!(), "simulated failure from Rust")` 写入一条 Rust ERROR 日志，并将 `Err` 返回给 Dart；Flutter 侧在 `try/catch` 中捕获异常并调用 `appLog(layer: 'Flutter', level: 'ERROR', fileAndLine: 'main.dart:...', message: 'mayFail(true) error: ...')`，从而在控制台看到一对配套的 Rust ERROR + Flutter ERROR 日志，验证了错误链路和统一日志格式生效。
