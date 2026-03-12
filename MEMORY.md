@@ -23,6 +23,9 @@
   - 只放当前迭代和下一步要做的事，完成后要么勾选，要么移到 Timeline
 
 # Timeline & Progress
+- 2026-03-13 [logging-test]:
+  - 问题现象：需要验证新建的日志与异常处理体系在实际交互中的行为，尤其是 Rust 端出错时是否会同时在 Rust / Flutter 两侧日志中体现。
+  - 解决方案：在 `MyApp` UI 中新增两个按钮，分别触发 `mayFail(false)`（成功路径）和 `mayFail(true)`（故意失败）；成功路径下仅输出一条 Flutter INFO 日志；故意失败时，Rust 侧通过 `log_from_rust(3, file!():line!(), "simulated failure from Rust")` 写入一条 Rust ERROR 日志，并将 `Err` 返回给 Dart；Flutter 侧在 `try/catch` 中捕获异常并调用 `appLog(layer: 'Flutter', level: 'ERROR', fileAndLine: 'main.dart:...', message: 'mayFail(true) error: ...')`，从而在控制台看到一对配套的 Rust ERROR + Flutter ERROR 日志，验证了错误链路和统一日志格式生效。
 - 2026-03-12 [logging-format]:
   - 问题现象：Flutter 与 Rust 的日志输出格式不一致，Flutter 侧形如 `[0][HomePage] 页面 build 完成`，Rust 侧形如 `rust log: 1773328712759 1 greet greet called with Tom`，不便于统一过滤与搜索。
   - 解决方案：在 `lib/main.dart` 中实现统一日志入口 `appLog`，约定输出格式为 `[timestamp][layer][level][file:line] message`，并提供 `_formatTimestamp` 和 `_levelLabelFromInt` 辅助函数；Flutter 侧调用 `appLog(layer: 'Flutter', level: 'INFO', fileAndLine: 'main.dart:42', message: '页面 build 完成')`；Rust 侧在 `greet` 中使用 `file!()` + `line!()` 生成形如 `simple.rs:48` 的位置信息，通过 `log_from_rust` 发送给 Dart，Dart 在 `setupRustLogging` 中将 `LogEntry` 映射为 `appLog(time: ..., layer: 'Rust', level: 'INFO', fileAndLine: event.tag, message: event.msg)`，从而实现 Flutter / Rust 日志统一格式输出。

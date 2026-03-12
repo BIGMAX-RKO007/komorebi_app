@@ -51,6 +51,22 @@ pub fn greet(name: String) -> String {
     format!("Hi, {name}! from Rust {}", name.len())
 }
 
+/// 示例：一个可能失败的接口，演示如何在出错时先写 Rust 日志再把错误返回给 Dart
+#[flutter_rust_bridge::frb(sync)]
+pub fn may_fail(should_fail: bool) -> Result<String, String> {
+    let file_line = format!("{}:{}", file!(), line!());
+
+    if should_fail {
+        let msg = "simulated failure from Rust";
+        // 先写一条错误级别日志
+        log_from_rust(3, &file_line, msg);
+        // 再把错误信息返回给 Dart（由 flutter_rust_bridge 映射为 Dart 侧的异常 / 错误）
+        Err(msg.to_string())
+    } else {
+        Ok("success from Rust".to_string())
+    }
+}
+
 /// flutter_rust_bridge 的初始化入口
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {

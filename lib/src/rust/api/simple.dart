@@ -27,6 +27,10 @@ Future<void> logFromRust({
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
 
+/// 示例：一个可能失败的接口，演示如何在出错时先写 Rust 日志再把错误返回给 Dart
+String mayFail({required bool shouldFail}) =>
+    RustLib.instance.api.crateApiSimpleMayFail(shouldFail: shouldFail);
+
 /// 从 Rust 发送到 Dart 的一条日志记录
 class LogEntry {
   final PlatformInt64 timeMillis;
