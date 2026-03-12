@@ -6,5 +6,56 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+
+/// 在 Dart 侧会生成函数签名：`Stream<LogEntry> createLogStream()`
+Stream<LogEntry> createLogStream() =>
+    RustLib.instance.api.crateApiSimpleCreateLogStream();
+
+/// 在 Rust 侧方便调用的统一日志入口
+Future<void> logFromRust({
+  required int level,
+  required String tag,
+  required String msg,
+}) => RustLib.instance.api.crateApiSimpleLogFromRust(
+  level: level,
+  tag: tag,
+  msg: msg,
+);
+
+/// 演示业务函数：在返回问候语前先打一个日志
 String greet({required String name}) =>
     RustLib.instance.api.crateApiSimpleGreet(name: name);
+
+/// 示例：一个可能失败的接口，演示如何在出错时先写 Rust 日志再把错误返回给 Dart
+String mayFail({required bool shouldFail}) =>
+    RustLib.instance.api.crateApiSimpleMayFail(shouldFail: shouldFail);
+
+/// 从 Rust 发送到 Dart 的一条日志记录
+class LogEntry {
+  final PlatformInt64 timeMillis;
+  final int level;
+  final String tag;
+  final String msg;
+
+  const LogEntry({
+    required this.timeMillis,
+    required this.level,
+    required this.tag,
+    required this.msg,
+  });
+
+  @override
+  int get hashCode =>
+      timeMillis.hashCode ^ level.hashCode ^ tag.hashCode ^ msg.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LogEntry &&
+          runtimeType == other.runtimeType &&
+          timeMillis == other.timeMillis &&
+          level == other.level &&
+          tag == other.tag &&
+          msg == other.msg;
+}
