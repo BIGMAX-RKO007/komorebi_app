@@ -9,6 +9,198 @@
 - Rust ↔ Flutter 配置：`flutter_rust_bridge.yaml`
 - Rust 构建工具说明：`rust_builder/README.md`
 
+# 项目结构说明（目录与文件职责）
+
+以下基于当前工程实际目录与文件，便于开发者快速理解层级与职责；**生成文件请勿手改**，业务只改标注为「可编辑」的部分。
+
+```
+komorebi_app/                    # 项目根目录
+├── lib/                         # Flutter 应用源码（Dart）
+│   ├── main.dart                 # 【可编辑】应用入口、统一日志 appLog、全局异常捕获、MyApp、ClockPage
+│   └── src/rust/                 # flutter_rust_bridge 生成代码，勿手改
+│       ├── frb_generated.dart    # FRB 运行时与入口（如 RustLib.init）
+│       ├── frb_generated.io.dart # 桌面/移动端 FFI 实现
+│       ├── frb_generated.web.dart# Web 端实现
+│       └── api/
+│           └── simple.dart       # 对 rust/src/api/simple.rs 的 Dart 绑定（greet、mayFail、createLogStream 等）
+│
+├── rust/                         # Rust 库（与 Flutter 桥接的业务与基础设施）
+│   ├── Cargo.toml                # 【可编辑】crate 依赖（如 flutter_rust_bridge、once_cell）
+│   ├── Cargo.lock                # 依赖锁定，一般自动维护
+│   └── src/
+│       ├── lib.rs                # 【可编辑】仅声明模块：pub mod api; mod frb_generated;
+│       ├── frb_generated.rs      # 生成代码，勿手改
+│       └── api/
+│           ├── mod.rs            # 【可编辑】声明子模块，如 pub mod simple;
+│           └── simple.rs         # 【可编辑】日志（LogEntry、create_log_stream、log_from_rust）、greet、mayFail 等
+│
+├── rust_builder/                 # 将 Rust 编译为各平台动态库的 Flutter 插件封装
+│   ├── pubspec.yaml              # 声明插件，供主工程依赖
+│   ├── android/                  # Android 构建脚本
+│   ├── ios/                      # iOS Podspec 等
+│   ├── macos/                    # macOS 构建
+│   ├── windows/                  # Windows CMake
+│   ├── linux/                    # Linux CMake
+│   └── cargokit/                 # 调用 Cargo 并产出各平台产物的工具与脚本
+│
+├── flutter_rust_bridge.yaml      # 【可编辑】FRB 配置：rust_input、rust_root、dart_output
+├── pubspec.yaml                  # 【可编辑】Flutter 依赖（含 rust_lib_komorebi_app、flutter_rust_bridge）
+├── MEMORY.md                     # 【可编辑】项目记忆：结构说明、日志用法、Timeline、TODO
+├── COMMANDS.md                   # 常用命令（如 codegen、运行、清理）可集中写于此
+│
+├── android/                      # Android 宿主工程（入口 MainActivity 等）
+├── ios/                          # iOS 宿主工程
+├── windows/                      # Windows 宿主工程
+├── macos/                        # macOS 宿主工程
+├── linux/                        # Linux 宿主工程
+├── web/                          # Web 资源（index.html 等）
+│
+├── integration_test/             # 集成测试
+└── test_driver/                  # 测试驱动
+```
+
+**职责速查**
+
+| 层级 | 职责 | 主要可编辑文件 |
+|------|------|----------------|
+| 根配置 | 应用依赖、FRB 代码生成配置、项目说明 | `pubspec.yaml`, `flutter_rust_bridge.yaml`, `MEMORY.md` |
+| Flutter UI/逻辑 | 入口、日志与异常、页面与业务调用 Rust | `lib/main.dart` |
+| Dart–Rust 绑定 | 由 FRB 根据 Rust API 生成，供 Dart 调用 | `lib/src/rust/**`（仅通过改 Rust + codegen 更新） |
+| Rust 业务与基础设施 | 日志流、业务接口、可失败示例 | `rust/src/lib.rs`, `rust/src/api/mod.rs`, `rust/src/api/simple.rs` |
+| Rust 构建与插件 | 各平台编译 Rust 并接入 Flutter | `rust_builder/**`（一般沿用模板即可） |
+| 各平台宿主 | 启动 Flutter、加载 Rust 动态库 | `android/`, `ios/`, `windows/`, `macos/`, `linux/`, `web/` |
+
+修改 Rust 公开 API 或类型后，需在项目根目录执行 `flutter_rust_bridge_codegen generate`（或项目约定的 codegen 命令），再重新构建/运行，否则会出现 Dart 与 Rust 内容哈希不一致等错误。
+
+# FRB 双向调用说明（Dart ↔ Rust）
+
+FRB（flutter_rust_bridge）实现的是 **Dart 与 Rust 之间的双向通信**：既可以由 Flutter/Dart 主动调用 Rust 函数并拿返回值，也可以由 Rust 在任意时刻向 Dart 推送数据（通过 Stream）。下面用当前工程里的真实代码说明两条链路，方便不熟悉 FRB 的开发者理解如何用好两种语言。
+
+---
+
+## 方向一：Dart 调用 Rust（Flutter 主动调 Rust，拿返回值）
+
+**含义**：在 Flutter 的 UI 或逻辑里，像调用普通 Dart 函数一样调用“由 Rust 实现的函数”，参数和返回值由 FRB 自动做类型转换。
+
+**1. Rust 侧：声明并实现供 Dart 调用的函数**
+
+在 `rust/src/api/simple.rs` 中，用 `#[flutter_rust_bridge::frb(sync)]` 标记的 `pub fn` 会被 codegen 暴露给 Dart，例如：
+
+```rust
+/// 演示业务函数：在返回问候语前先打一个日志
+#[flutter_rust_bridge::frb(sync)]
+pub fn greet(name: String) -> String {
+    let file_line = format!("{}:{}", file!(), line!());
+    log_from_rust(1, &file_line, &format!("greet called with {name}"));
+    format!("Hi, {name}! from Rust {}", name.len())
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn may_fail(should_fail: bool) -> Result<String, String> {
+    // 成功返回 Ok(s)，失败返回 Err(e)；Dart 侧失败时会收到异常，需 try/catch
+    if should_fail { Err("simulated failure from Rust".to_string()) } else { Ok("success from Rust".to_string()) }
+}
+```
+
+- `greet(name: String) -> String`：Dart 调用时传入 `name`，直接拿到 `String` 返回值。
+- `may_fail(should_fail: bool) -> Result<String, String>`：Dart 侧成功时拿到 `String`，失败时 FRB 会把它映射为 Dart 的异常，需在 Dart 里 `try/catch`。
+
+**2. Dart 侧：使用 codegen 生成的绑定函数**
+
+运行 `flutter_rust_bridge_codegen generate` 后，会在 `lib/src/rust/api/simple.dart` 中生成对应的 Dart 函数（该文件为自动生成，勿手改），例如：
+
+```dart
+String greet({required String name}) =>
+    RustLib.instance.api.crateApiSimpleGreet(name: name);
+
+String mayFail({required bool shouldFail}) =>
+    RustLib.instance.api.crateApiSimpleMayFail(shouldFail: shouldFail);
+```
+
+**3. Flutter 业务代码里直接调用**
+
+在 `lib/main.dart` 中 import 上述 API 后，像调用普通 Dart 函数一样调用即可：
+
+```dart
+import 'package:komorebi_app/src/rust/api/simple.dart';
+
+// 同步调用，直接拿到返回值
+final message = greet(name: "Tom");
+
+// 可能抛异常，需要 try/catch
+try {
+  final result = mayFail(shouldFail: false);
+} catch (e, s) {
+  appLog(layer: 'Flutter', level: 'ERROR', ...);
+}
+```
+
+**小结**：在 Rust 里写带 `#[frb]` 的 `pub fn`，跑 codegen 后 Dart 侧就会出现对应函数；Flutter 里直接调用即可，实现 **Dart → Rust** 的“主动调用、拿返回值”。
+
+---
+
+## 方向二：Rust 向 Dart 推送数据（Rust 主动推，Dart 用 Stream 接收）
+
+**含义**：Rust 在任意时刻（例如计算完成、或收到事件时）向 Dart 推送一条数据，Dart 通过订阅 Stream 即可收到，无需轮询。本项目中用这条链路实现了“Rust 日志发到 Dart 统一打印”。
+
+**1. Rust 侧：接收 Dart 传进来的“发送端”，并保存起来**
+
+Dart 会先调用一个“创建 Stream”的 Rust 函数，并把 FRB 提供的 `StreamSink<T>` 传进 Rust；Rust 把这个 sink 存到全局（或结构体），之后随时可以往 sink 里 `add` 数据，数据就会出现在 Dart 的 Stream 里。
+
+在 `rust/src/api/simple.rs` 中：
+
+```rust
+static LOG_STREAM_SINK: Lazy<Mutex<Option<StreamSink<LogEntry>>>> = ...
+
+/// Dart 调用 createLogStream() 时，FRB 会创建 Stream 并把对应的 Sink 传进本函数
+pub fn create_log_stream(sink: StreamSink<LogEntry>) {
+    let mut guard = LOG_STREAM_SINK.lock().unwrap();
+    *guard = Some(sink);
+}
+
+/// 任意时刻在 Rust 里调用，即可向 Dart 推送一条日志
+pub fn log_from_rust(level: i32, tag: &str, msg: &str) {
+    let entry = LogEntry { time_millis, level, tag: tag.to_string(), msg: msg.to_string() };
+    if let Some(sink) = LOG_STREAM_SINK.lock().unwrap().as_ref() {
+        let _ = sink.add(entry);   // 这里一 add，Dart 的 listen 就会收到
+    }
+}
+```
+
+**2. Dart 侧：订阅 Stream，收到 Rust 推来的数据**
+
+在 `lib/main.dart` 中，应用启动后先调用 `createLogStream()`（内部会调用 Rust 的 `create_log_stream` 并把当前 Stream 的 Sink 传给 Rust），再对返回的 `Stream<LogEntry>` 做 `listen`：
+
+```dart
+Future<void> setupRustLogging() async {
+  createLogStream().listen((event) {
+    // event 即 Rust 里 sink.add(entry) 的 LogEntry
+    final eventTime = DateTime.fromMillisecondsSinceEpoch(event.timeMillis.toInt(), isUtc: true);
+    appLog(time: eventTime, layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg);
+  });
+}
+
+// 在 main() 里：await RustLib.init(); 之后调用
+await setupRustLogging();
+```
+
+**3. 调用顺序与数据流**
+
+1. Flutter 启动 → `RustLib.init()` → `setupRustLogging()`。
+2. `createLogStream()` 被调用 → FRB 在底层创建一条 Stream，并把对应的 `StreamSink<LogEntry>` 传给 Rust 的 `create_log_stream(sink)` → Rust 把 `sink` 存到 `LOG_STREAM_SINK`。
+3. 之后任意时刻，Rust 代码（例如 `greet` 里）调用 `log_from_rust(...)` → 内部 `sink.add(entry)` → Dart 的 `createLogStream().listen((event) { ... })` 收到 `event`，在回调里用 `appLog` 打印或写文件。
+
+**小结**：Rust 不直接“调 Dart 函数”，而是 **Dart 先把一个“发送端”（StreamSink）交给 Rust，Rust 之后随时往这个发送端里 add 数据，Dart 通过 Stream 的 listen 收到**，实现 **Rust → Dart** 的“主动推送”。
+
+---
+
+## 如何利用两种语言
+
+| 更适合放在 Rust | 更适合放在 Flutter/Dart |
+|----------------|------------------------|
+| 高性能计算、与系统/硬件/安全相关的逻辑、已有 Rust 库的复用、多端共享的核心算法 | UI、路由、本地状态、与 Flutter 生态的集成、快速迭代的交互逻辑 |
+| 在 Rust 里用 `#[frb]` 暴露为函数，或通过 StreamSink 向 Dart 推送数据 | 需要结果时调用 Rust 函数；需要持续接收数据时订阅 Rust 通过 Stream 推来的数据 |
+
 # Current State
 - 状态：刚完成基础模板初始化，已确认 Flutter + Rust 桥接可运行，尚未开始 3D 相关功能开发。
 
@@ -46,6 +238,9 @@
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
+- 2026-03-13 [clock-page]:
+  - 问题现象：需要一个简单但直观的 Flutter 页面来作为基础 UI 验证和后续交互实验的载体。
+  - 解决方案：在 `lib/main.dart` 中实现 `ClockPage`（StatefulWidget + Timer），作为应用首页（`MyApp` 的 `home`）；`ClockPage` 使用 `Timer.periodic` 每秒更新当前时间，在全黑背景上居中显示大号的 `HH:MM:SS` 和当天日期 `YYYY-MM-DD`，用于验证状态更新、重绘性能和基础 UI 管线工作正常。
 - 2026-03-13 [logging-test]:
   - 问题现象：需要验证新建的日志与异常处理体系在实际交互中的行为，尤其是 Rust 端出错时是否会同时在 Rust / Flutter 两侧日志中体现。
   - 解决方案：在 `MyApp` UI 中新增两个按钮，分别触发 `mayFail(false)`（成功路径）和 `mayFail(true)`（故意失败）；成功路径下仅输出一条 Flutter INFO 日志；故意失败时，Rust 侧通过 `log_from_rust(3, file!():line!(), "simulated failure from Rust")` 写入一条 Rust ERROR 日志，并将 `Err` 返回给 Dart；Flutter 侧在 `try/catch` 中捕获异常并调用 `appLog(layer: 'Flutter', level: 'ERROR', fileAndLine: 'main.dart:...', message: 'mayFail(true) error: ...')`，从而在控制台看到一对配套的 Rust ERROR + Flutter ERROR 日志，验证了错误链路和统一日志格式生效。

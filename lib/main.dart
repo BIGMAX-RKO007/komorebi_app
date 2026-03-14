@@ -117,23 +117,78 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 示例：Flutter 侧日志
-    appLog(
-      layer: 'Flutter',
-      level: 'INFO',
-      fileAndLine: 'main.dart:42',
-      message: '页面 build 完成',
-    );
-
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: const Text('flutter_rust_bridge quickstart')),
-        body: Center(
-          child: Text(
-            'Action: Call Rust `greet("Tom")`\nResult: `${greet(name: "Tom")}`',
-          ),
+      debugShowCheckedModeBanner: false,
+      home: const ClockPage(),
+    );
+  }
+}
+
+/// 一个简单的全屏钟表页面
+/// - 使用 StatefulWidget + Timer 每秒刷新时间
+class ClockPage extends StatefulWidget {
+  const ClockPage({super.key});
+
+  @override
+  State<ClockPage> createState() => _ClockPageState();
+}
+
+class _ClockPageState extends State<ClockPage> {
+  late DateTime _now;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    // 每秒刷新一次时间
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _now = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timeText =
+        '${_two(_now.hour)}:${_two(_now.minute)}:${_two(_now.second)}';
+    final dateText =
+        '${_now.year}-${_two(_now.month)}-${_two(_now.day)}';
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              timeText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 80,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              dateText,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 24,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  String _two(int n) => n.toString().padLeft(2, '0');
 }
