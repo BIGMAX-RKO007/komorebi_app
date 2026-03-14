@@ -16,13 +16,21 @@
 ```
 komorebi_app/                    # 项目根目录
 ├── lib/                         # Flutter 应用源码（Dart）
-│   ├── main.dart                 # 【可编辑】应用入口、统一日志 appLog、全局异常捕获、MyApp、ClockPage
+│   ├── main.dart                 # 【可编辑】应用入口、统一日志 appLog、全局异常捕获、MyApp
+│   ├── data/
+│   │   └── log/
+│   │       └── log_repository.dart # 【可编辑】日志数据层，管理日志流与内存存储
+│   ├── ui/
+│   │   └── log/
+│   │       └── log_page.dart     # 【可编辑】极简日志展示页面
+│   ├── view_model/
+│   │   └── log_view_model.dart   # 【可编辑】日志逻辑层，对接 UI 和 Repository 触发 Rust
 │   └── src/rust/                 # flutter_rust_bridge 生成代码，勿手改
 │       ├── frb_generated.dart    # FRB 运行时与入口（如 RustLib.init）
 │       ├── frb_generated.io.dart # 桌面/移动端 FFI 实现
 │       ├── frb_generated.web.dart# Web 端实现
 │       └── api/
-│           └── simple.dart       # 对 rust/src/api/simple.rs 的 Dart 绑定（greet、mayFail、createLogStream 等）
+│           └── simple.dart       # 对 rust/src/api/simple.rs 的 Dart 绑定（greet, mayFail, createLogStream, triggerRefreshLog 等）
 │
 ├── rust/                         # Rust 库（与 Flutter 桥接的业务与基础设施）
 │   ├── Cargo.toml                # 【可编辑】crate 依赖（如 flutter_rust_bridge、once_cell）
@@ -238,6 +246,9 @@ await setupRustLogging();
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
+- 2026-03-15 [log-refresh-flow]:
+  - 问题现象：需要验证从 Flutter UI 层一路打通到 Rust 底层的交互全链路，要求在 `LogPage` 点击刷新按钮时，先由 `LogViewModel` 在 Flutter 侧输出一条“点击了日志刷新按钮”，再触发 Rust 输出一条带有具体行号的“rust 调用成功”日志，最终双双展示在 UI 流上。
+  - 解决方案：遵循了单向依赖与数据流原则（View → ViewModel → Repository）。首先在 `lib/main.dart` 补充了应用启动日志。接着在 `LogPage` AppBar 增加 IconButton 调用 `_viewModel.refreshLogs()`；在 `LogViewModel` 发送“点击事件”给 `LogRepository` 打印。随后 `LogViewModel` 调用了由 FFI 暴露的 Rust 接口 `triggerRefreshLog()`；其对应的 Rust 原生函数定义于 `rust/src/api/simple.rs`，并在内部通过 `log_from_rust` 推送“rust 调用成功”。测试表明 FFI 生成即时生效，成功从前端按钮触发深入到了 Rust 底层并最终将结果回调展示在页面视图中，跨端通信基建非常坚固。
 - 2026-03-13 [clock-page]:
   - 问题现象：需要一个简单但直观的 Flutter 页面来作为基础 UI 验证和后续交互实验的载体。
   - 解决方案：在 `lib/main.dart` 中实现 `ClockPage`（StatefulWidget + Timer），作为应用首页（`MyApp` 的 `home`）；`ClockPage` 使用 `Timer.periodic` 每秒更新当前时间，在全黑背景上居中显示大号的 `HH:MM:SS` 和当天日期 `YYYY-MM-DD`，用于验证状态更新、重绘性能和基础 UI 管线工作正常。

@@ -67,6 +67,14 @@ pub fn may_fail(should_fail: bool) -> Result<String, String> {
     }
 }
 
+/// 点击刷新按钮触发的 Rust 函数
+#[flutter_rust_bridge::frb(sync)]
+pub fn trigger_refresh_log() {
+    let file_line = format!("{}:{}", file!(), line!());
+    // 触发打印日志给到 Flutter
+    log_from_rust(1, &file_line, "rust 调用成功");
+}
+
 /// flutter_rust_bridge 的初始化入口
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
