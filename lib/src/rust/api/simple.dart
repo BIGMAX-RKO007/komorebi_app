@@ -31,6 +31,10 @@ String greet({required String name}) =>
 String mayFail({required bool shouldFail}) =>
     RustLib.instance.api.crateApiSimpleMayFail(shouldFail: shouldFail);
 
+/// 点击刷新按钮触发的 Rust 函数
+void triggerRefreshLog() =>
+    RustLib.instance.api.crateApiSimpleTriggerRefreshLog();
+
 /// 从 Rust 发送到 Dart 的一条日志记录
 class LogEntry {
   final PlatformInt64 timeMillis;

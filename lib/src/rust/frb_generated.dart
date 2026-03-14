@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 575471754;
+  int get rustContentHash => -1297734150;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -90,6 +90,8 @@ abstract class RustLibApi extends BaseApi {
   });
 
   String crateApiSimpleMayFail({required bool shouldFail});
+
+  void crateApiSimpleTriggerRefreshLog();
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -240,6 +242,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiSimpleMayFailConstMeta =>
       const TaskConstMeta(debugName: "may_fail", argNames: ["shouldFail"]);
+
+  @override
+  void crateApiSimpleTriggerRefreshLog() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleTriggerRefreshLogConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleTriggerRefreshLogConstMeta =>
+      const TaskConstMeta(debugName: "trigger_refresh_log", argNames: []);
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
