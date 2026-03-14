@@ -22,7 +22,7 @@
   - `flutter run -d chrome`  
   - `flutter run -d edge`  
   - `flutter run -d emulator-5554`（Android 模拟器 ID）  
-  - `flutter run -d <device_id>`（任意设备 ID） [docs.flutter](https://docs.flutter.dev/reference/flutter-cli)
+  - `flutter run -d R3CM603Y1YF`（任意设备 ID） [docs.flutter](https://docs.flutter.dev/reference/flutter-cli)
 
 ### 1.2 Android / iOS 开发期命令（移动端）
 

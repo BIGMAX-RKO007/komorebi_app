@@ -18,12 +18,19 @@ komorebi_app/                    # 项目根目录
 ├── lib/                         # Flutter 应用源码（Dart）
 │   ├── main.dart                 # 【可编辑】应用入口、统一日志 appLog、全局异常捕获、MyApp
 │   ├── data/
+│   │   ├── imu/
+│   │   │   └── imu_repository.dart # 【可编辑】IMU 数据层，负责封装对接底层 Rust 姿态解算
 │   │   └── log/
 │   │       └── log_repository.dart # 【可编辑】日志数据层，管理日志流与内存存储
 │   ├── ui/
+│   │   ├── home/
+│   │   │   └── home_page.dart    # 【可编辑】主页，整合了 IMU 对比看板与日志面板
+│   │   ├── imu/
+│   │   │   └── imu_page.dart     # 【可编辑】IMU 对比看板 UI 组件
 │   │   └── log/
-│   │       └── log_page.dart     # 【可编辑】极简日志展示页面
+│   │       └── log_page.dart     # 【可编辑】原极简日志展示页面（已拆分到主页复用）
 │   ├── view_model/
+│   │   ├── imu_view_model.dart   # 【可编辑】IMU 数据流状态管理，遵循 MVVM 仅调用 Repository
 │   │   └── log_view_model.dart   # 【可编辑】日志逻辑层，对接 UI 和 Repository 触发 Rust
 │   └── src/rust/                 # flutter_rust_bridge 生成代码，勿手改
 │       ├── frb_generated.dart    # FRB 运行时与入口（如 RustLib.init）
@@ -246,9 +253,20 @@ await setupRustLogging();
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
-- 2026-03-15 [log-refresh-flow]:
-  - 问题现象：需要验证从 Flutter UI 层一路打通到 Rust 底层的交互全链路，要求在 `LogPage` 点击刷新按钮时，先由 `LogViewModel` 在 Flutter 侧输出一条“点击了日志刷新按钮”，再触发 Rust 输出一条带有具体行号的“rust 调用成功”日志，最终双双展示在 UI 流上。
-  - 解决方案：遵循了单向依赖与数据流原则（View → ViewModel → Repository）。首先在 `lib/main.dart` 补充了应用启动日志。接着在 `LogPage` AppBar 增加 IconButton 调用 `_viewModel.refreshLogs()`；在 `LogViewModel` 发送“点击事件”给 `LogRepository` 打印。随后 `LogViewModel` 调用了由 FFI 暴露的 Rust 接口 `triggerRefreshLog()`；其对应的 Rust 原生函数定义于 `rust/src/api/simple.rs`，并在内部通过 `log_from_rust` 推送“rust 调用成功”。测试表明 FFI 生成即时生效，成功从前端按钮触发深入到了 Rust 底层并最终将结果回调展示在页面视图中，跨端通信基建非常坚固。
+- 2026-03-15 [ui-mvvm-refactor]:
+  - 问题现象：用户要求遵循 MVVM 原则，剥离 `ImuViewModel` 中直接调用 Rust API 的逻辑，并将新增的 `ImuPage` 与原来的日志视图集成到同一个页面中，同时保持 `main.dart` 轻量。
+  - 执行命令与依赖变更：
+    - 运行 `flutter pub add provider` 引入 provider 库作为状态管理（UI 根据数据状态重绘）。
+  - 解决方案：
+    - 新增 `lib/data/imu/imu_repository.dart` 并将 `updateAhrs` 和 `initAhrs` 的底层 Rust 调用迁移至此。
+    - 将 `ImuViewModel` 的依赖从 Rust API 改为 `ImuRepository.instance`。
+    - 新增 `lib/ui/home/home_page.dart`，将独立的 `ImuPage` 作为组件嵌入上半部分，并在下半部分拆分并嵌入了实时日志输出列表，使得 `MainNavigation` 可以被删除。
+- 2026-03-15 [imu-comparison-view]:
+  - 问题现象：需要验证从 Flutter UI 层一路打通到 Rust 底层的交互全链路，要求在 `LogPage` 点击刷新按钮时，先由 `LogViewModel` 在 Flutter 侧输出一条“点击了日志刷新按钮”，再触发 Rust 输出一条带有具体行号的“rust 调用成功”日志，最终双双展示在 UI 流上。后续增加了实现设备姿态流 (Dart vs Rust) 的实时分屏对比实验页面，并在后台通过 `flutter_rust_bridge_codegen generate --watch` 自动维护双端绑定。
+  - 执行命令与依赖变更：
+    - Flutter 端获取传感器数据：运行 `flutter pub add sensors_plus` 引入 IMU 流读取能力。
+    - Rust 端传感器融合过滤算法：运行 `cargo add ahrs nalgebra` 引入 Madgwick 滤波器及所需的高性能矩阵计算依赖。
+  - 解决方案：遵循了单向依赖与数据流原则（View → ViewModel → Repository）。首先在 `lib/main.dart` 补充了应用启动日志。接着在 `LogPage` AppBar 增加 IconButton 调用 `_viewModel.refreshLogs()`；在 `LogViewModel` 发送“点击事件”给 `LogRepository` 打印。随后 `LogViewModel` 调用了由 FFI 暴露的 Rust 接口 `triggerRefreshLog()`；其对应的 Rust 原生函数定义于 `rust/src/api/simple.rs`，并在内部通过 `log_from_rust` 推送“rust 调用成功”。之后开始构建 `ImuPage` 以展示横向和纵向传感器读数差异测试，测试表明 FFI 生成即时生效，跨端通信基建非常坚固。
 - 2026-03-13 [clock-page]:
   - 问题现象：需要一个简单但直观的 Flutter 页面来作为基础 UI 验证和后续交互实验的载体。
   - 解决方案：在 `lib/main.dart` 中实现 `ClockPage`（StatefulWidget + Timer），作为应用首页（`MyApp` 的 `home`）；`ClockPage` 使用 `Timer.periodic` 每秒更新当前时间，在全黑背景上居中显示大号的 `HH:MM:SS` 和当天日期 `YYYY-MM-DD`，用于验证状态更新、重绘性能和基础 UI 管线工作正常。
