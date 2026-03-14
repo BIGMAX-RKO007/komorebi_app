@@ -1,0 +1,44 @@
+# ============================================================
+# komorebi_app — Windows CI/CD
+# 触发：push 到 main 分支 / PR 到 main
+# 产物：Windows 可执行文件
+# ============================================================
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      # ---- 基础环境 ----
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 构建 Windows 应用 (release)
+        run: flutter build windows
+
+      # ---- 上传产物 ----
+      - name: 上传 Windows 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: build/windows
+          retention-days: 14
