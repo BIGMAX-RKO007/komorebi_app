@@ -20,6 +20,8 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write  # 这行是关键：允许 Action 创建 Release 和上传附件
 
     steps:
       - name: Checkout 代码
