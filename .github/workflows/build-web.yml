@@ -37,6 +37,9 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: 安装 nightly rust-src 组件
+        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+
       # ---- 缓存 ----
       - name: 缓存 Cargo 依赖
         uses: actions/cache@v4
