@@ -1,0 +1,84 @@
+# ============================================================
+# komorebi_app — iOS CI/CD
+# 触发：push 到 main 分支 / PR 到 main
+# 产物：未签名的 .app (Runner.app)
+# 注意：正式上架需要在本地或通过 Fastlane 配置签名证书
+# ============================================================
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      # ---- 基础环境 ----
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+
+      # ---- 缓存 ----
+      - name: 缓存 Cargo 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-ios-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: cargo-ios-
+
+      - name: 缓存 CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: pods-
+
+      # ---- 安装 flutter_rust_bridge_codegen ----
+      - name: 安装 flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version 2.11.1
+
+      # ---- 代码生成 ----
+      - name: 生成 Rust ↔ Dart 绑定
+        run: flutter_rust_bridge_codegen generate
+
+      # ---- Flutter 依赖 ----
+      - name: 获取 Flutter 依赖
+        run: flutter pub get
+
+      # ---- 构建 ----
+      # 无签名构建：生成 .app 用于验证编译通过
+      # 如需签名 IPA，请配置 secrets 中的证书和 Provisioning Profile
+      - name: 构建 iOS (release, 无代码签名)
+        run: |
+          flutter build ios --release --no-codesign
+
+      # ---- 上传产物 ----
+      - name: 打包并上传 iOS 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-app
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 14
