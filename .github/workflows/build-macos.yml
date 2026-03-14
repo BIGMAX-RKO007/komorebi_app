@@ -22,7 +22,6 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      # ---- 基础环境 ----
       - name: Checkout 代码
         uses: actions/checkout@v4
 
@@ -35,10 +34,31 @@ jobs:
       - name: 构建 macOS 应用 (release)
         run: flutter build macos
 
-      # ---- 上传产物 ----
       - name: 上传 macOS 构建产物
         uses: actions/upload-artifact@v4
         with:
           name: macos-release
           path: build/macos
           retention-days: 14
+
+      - name: 设置日期时间
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: datetime
+        run: echo "date=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+
+      - name: 创建 Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "macos-release-${{ steps.datetime.outputs.date }}-${{ github.run_number }}"
+          name: "macOS Release ${{ steps.datetime.outputs.date }}-${{ github.run_number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传 Release 产物
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/macos/**/*.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -22,7 +22,6 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      # ---- 基础环境 ----
       - name: Checkout 代码
         uses: actions/checkout@v4
 
@@ -38,10 +37,31 @@ jobs:
       - name: 构建 Linux 应用 (release)
         run: flutter build linux
 
-      # ---- 上传产物 ----
       - name: 上传 Linux 构建产物
         uses: actions/upload-artifact@v4
         with:
           name: linux-release
           path: build/linux
           retention-days: 14
+
+      - name: 设置日期时间
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: datetime
+        run: echo "date=$(date +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+
+      - name: 创建 Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "linux-release-${{ steps.datetime.outputs.date }}-${{ github.run_number }}"
+          name: "Linux Release ${{ steps.datetime.outputs.date }}-${{ github.run_number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传 Release 产物
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/linux/**/*.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
