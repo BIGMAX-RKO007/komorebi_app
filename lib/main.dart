@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:komorebi_app/data/log/log_repository.dart';
 import 'package:komorebi_app/src/rust/frb_generated.dart';
-import 'package:komorebi_app/ui/home/home_page.dart';
+import 'package:komorebi_app/ui/landing/landing_page.dart';
 
 Future<void> main() async {
   // 使用 runZonedGuarded 捕获绝大部分未处理异常，并统一写入日志
@@ -47,9 +47,16 @@ class MyApp extends StatelessWidget {
       message: '程序启动了',
     );
     
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: HomePage(),
+      title: 'Komorebi',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Colors.black,
+        useMaterial3: true,
+      ),
+      home: const LandingPage(),
     );
   }
 }

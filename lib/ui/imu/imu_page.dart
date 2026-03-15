@@ -104,7 +104,7 @@ class _ImuView extends StatelessWidget {
               width: 70,
               height: 100,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.3),
+                color: color.withValues(alpha: 0.3),
                 border: Border.all(color: color, width: 2),
                 borderRadius: BorderRadius.circular(8),
               ),

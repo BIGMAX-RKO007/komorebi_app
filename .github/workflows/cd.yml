@@ -1,0 +1,97 @@
+name: CD - Web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'rust/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/cd.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  FLUTTER_CHANNEL: stable
+  FRB_VERSION: 2.11.1
+  BASE_HREF: /komorebi_app/
+
+jobs:
+  build:
+    name: Build Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Add nightly rust-src
+        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-web-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: cargo-web-
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+
+      - name: Generate Rust ↔ Dart bindings
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Build Rust WASM
+        run: flutter_rust_bridge_codegen build-web
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href "${{ env.BASE_HREF }}"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/web
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

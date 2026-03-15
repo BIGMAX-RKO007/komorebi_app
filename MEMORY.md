@@ -253,6 +253,21 @@ await setupRustLogging();
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
+- 2026-03-15 [ui-landing-entry]:
+  - 问题现象：项目需要上线 Web 平台，直接进入功能实验页（原 `HomePage`）缺乏品牌感知和引导。需要一个具备“游戏启动页”风格的入口，向访问者介绍项目目标、当前开发状态，并提供清晰的进入路径。
+  - 解决方案：实施了 Web 导向的首页重构方案：
+    1. **新建着陆页 `landing_page.dart`**：设计了极简深色科技感 UI，包含 "KOMOREBI" 大标题和副标题。新增了 **CAPABILITY STATUS** 面板，通过状态磁贴直观展示 IMU、Rust Core、LLM 等核心模块的活跃状态（Active/Planned）。
+    2. **路由架构解耦**：将原 `home_page.dart` 重命名为 `feature_page.dart` (类名改为 `FeaturePage`)，定位为“功能演示/实验区”。在 `main.dart` 中将初始路由切换为 `LandingPage`。
+    3. **视觉风格标准化**：在 `main.dart` 为 `MaterialApp` 配置了完整的深色主题（Material 3 Dark Theme），统一了应用在桌面端与 Web 端的视觉基调，并移除了代码中过时的 `withOpacity`（改为 `.withValues`）并精修了 `const` 约束。
+- 2026-03-15 [ui-adaptive-dashboard]:
+  - 问题现象：应用主页需要面向未来支持手机、平板、宽带桌面端的多端自由缩放与扩展。原有固定比例的 `Column` 或粗糙的横竖屏切换在添加更多窗格时会导致严重的宽度挤压；并且在宽平台快速 Resize 窗口时，底层（如 Rust）的异步日志上报会导致 Flutter 在进行 Layout 测量时触发严重的同步撞帧（`setState called during build`）崩溃报错。
+  - 解决方案：在 `home_page.dart` 与对应的 View Model 进行了系统级的终极自适应架构重构：
+    1. **三层跨端宽度断点 (Breakpoints)**：
+       - **大屏 (>= 900)**：左主区 + 右侧栏架构，主侧区宽度死锁为强对抗性的 `7:3` 比例，同时内部通过各子 Pane 的垂直 `flex` 权重计算高度，保护大视界展现。
+       - **中屏 (600-900)**：自动折行的双列网格布局。当窗格超过两个时自动折行（Row nesting），并利用所在行的最大权重面版动态顶起当前行的弹性行高（`rowFlex`）。
+       - **小屏 (< 600)**：小屏幕回归安全的单列垂直堆叠。
+    2. **完全解耦的数据组件**：提取了 `AdaptivePane` 泛型实体和壳组件 `_AdaptiveDashboardLayout`，主页只需在 `panes: [...]` 中塞入积木面版及预期弹性比重，壳组件会自动完成测量、截断和精准绘制多端各向分割线。
+    3. **微任务状态解耦 (Microtask Decoupling)**：将 `_LogListPanel` 精简为无生命周期包袱的 `StatelessWidget + ListenableBuilder`；在 `LogViewModel.dart` 中，将向上抛出给 UI 层的同步 `notifyListeners()` 强行推迟到当前布局帧结束后的微任务队列（`Future.microtask(...)`）中。这彻底断绝了快速改变窗口大小导致底层数据频繁 Layout 发出的框架测算重绘冲突（Frame racing），实现极简轻量的页面流自适应安全更新机制。
 - 2026-03-15 [ui-mvvm-refactor]:
   - 问题现象：用户要求遵循 MVVM 原则，剥离 `ImuViewModel` 中直接调用 Rust API 的逻辑，并将新增的 `ImuPage` 与原来的日志视图集成到同一个页面中，同时保持 `main.dart` 轻量。
   - 执行命令与依赖变更：
