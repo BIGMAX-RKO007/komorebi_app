@@ -18,12 +18,21 @@ komorebi_app/                    # 项目根目录
 ├── lib/                         # Flutter 应用源码（Dart）
 │   ├── main.dart                 # 【可编辑】应用入口、统一日志 appLog、全局异常捕获、MyApp
 │   ├── data/
+│   │   ├── imu/
+│   │   │   └── imu_repository.dart # 【可编辑】IMU 数据层，负责封装对接底层 Rust 姿态解算
 │   │   └── log/
 │   │       └── log_repository.dart # 【可编辑】日志数据层，管理日志流与内存存储
 │   ├── ui/
+│   │   ├── landing/
+│   │   │   └── landing_page.dart    # 【可编辑】应用入口页/引导页，包含品牌介绍与能力状态板
+│   │   ├── home/
+│   │   │   └── feature_page.dart    # 【可编辑】核心展示页，整合了 IMU 对比看板与日志面板
+│   │   ├── imu/
+│   │   │   └── imu_page.dart        # 【可编辑】IMU 对比看板 UI 组件
 │   │   └── log/
-│   │       └── log_page.dart     # 【可编辑】极简日志展示页面
+│   │       └── log_page.dart        # 【可编辑】原极简日志展示页面（已拆分到展示页复用）
 │   ├── view_model/
+│   │   ├── imu_view_model.dart   # 【可编辑】IMU 数据流状态管理，遵循 MVVM 仅调用 Repository
 │   │   └── log_view_model.dart   # 【可编辑】日志逻辑层，对接 UI 和 Repository 触发 Rust
 │   └── src/rust/                 # flutter_rust_bridge 生成代码，勿手改
 │       ├── frb_generated.dart    # FRB 运行时与入口（如 RustLib.init）
@@ -39,8 +48,9 @@ komorebi_app/                    # 项目根目录
 │       ├── lib.rs                # 【可编辑】仅声明模块：pub mod api; mod frb_generated;
 │       ├── frb_generated.rs      # 生成代码，勿手改
 │       └── api/
-│           ├── mod.rs            # 【可编辑】声明子模块，如 pub mod simple;
-│           └── simple.rs         # 【可编辑】日志（LogEntry、create_log_stream、log_from_rust）、greet、mayFail 等
+│   │           ├── mod.rs            # 【可编辑】声明子模块，如 pub mod simple, imu;
+│   │           ├── simple.rs         # 【可编辑】日志流（LogEntry, create_log_stream）、greet、mayFail 等
+│   │           └── imu.rs            # 【可编辑】IMU 相关 API，包含姿态解算推送流（create_imu_stream）
 │
 ├── rust_builder/                 # 将 Rust 编译为各平台动态库的 Flutter 插件封装
 │   ├── pubspec.yaml              # 声明插件，供主工程依赖
@@ -72,9 +82,9 @@ komorebi_app/                    # 项目根目录
 | 层级 | 职责 | 主要可编辑文件 |
 |------|------|----------------|
 | 根配置 | 应用依赖、FRB 代码生成配置、项目说明 | `pubspec.yaml`, `flutter_rust_bridge.yaml`, `MEMORY.md` |
-| Flutter UI/逻辑 | 入口、日志与异常、页面与业务调用 Rust | `lib/main.dart` |
+| Flutter UI/逻辑 | 入口引导、全局异常、业务页面与自适应布局 | `lib/main.dart`, `lib/ui/landing/landing_page.dart`, `lib/ui/home/feature_page.dart` |
 | Dart–Rust 绑定 | 由 FRB 根据 Rust API 生成，供 Dart 调用 | `lib/src/rust/**`（仅通过改 Rust + codegen 更新） |
-| Rust 业务与基础设施 | 日志流、业务接口、可失败示例 | `rust/src/lib.rs`, `rust/src/api/mod.rs`, `rust/src/api/simple.rs` |
+| Rust 业务层 | 日志流、IMU 姿态解算、业务逻辑接口 | `rust/src/api/simple.rs`, `rust/src/api/imu.rs` |
 | Rust 构建与插件 | 各平台编译 Rust 并接入 Flutter | `rust_builder/**`（一般沿用模板即可） |
 | 各平台宿主 | 启动 Flutter、加载 Rust 动态库 | `android/`, `ios/`, `windows/`, `macos/`, `linux/`, `web/` |
 
@@ -246,9 +256,35 @@ await setupRustLogging();
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
-- 2026-03-15 [log-refresh-flow]:
-  - 问题现象：需要验证从 Flutter UI 层一路打通到 Rust 底层的交互全链路，要求在 `LogPage` 点击刷新按钮时，先由 `LogViewModel` 在 Flutter 侧输出一条“点击了日志刷新按钮”，再触发 Rust 输出一条带有具体行号的“rust 调用成功”日志，最终双双展示在 UI 流上。
-  - 解决方案：遵循了单向依赖与数据流原则（View → ViewModel → Repository）。首先在 `lib/main.dart` 补充了应用启动日志。接着在 `LogPage` AppBar 增加 IconButton 调用 `_viewModel.refreshLogs()`；在 `LogViewModel` 发送“点击事件”给 `LogRepository` 打印。随后 `LogViewModel` 调用了由 FFI 暴露的 Rust 接口 `triggerRefreshLog()`；其对应的 Rust 原生函数定义于 `rust/src/api/simple.rs`，并在内部通过 `log_from_rust` 推送“rust 调用成功”。测试表明 FFI 生成即时生效，成功从前端按钮触发深入到了 Rust 底层并最终将结果回调展示在页面视图中，跨端通信基建非常坚固。
+- 2026-03-15 [ui-landing-entry]:
+  - 问题现象：项目需要上线 Web 平台，直接进入功能实验页（原 `HomePage`）缺乏品牌感知和引导。需要一个具备“游戏启动页”风格的入口，向访问者介绍项目目标、当前开发状态，并提供清晰的进入路径。
+  - 解决方案：实施了 Web 导向的首页重构方案：
+    1. **新建着陆页 `landing_page.dart`**：设计了极简深色科技感 UI，包含 "KOMOREBI" 大标题和副标题。新增了 **CAPABILITY STATUS** 面板，通过状态磁贴直观展示 IMU、Rust Core、LLM 等核心模块的活跃状态（Active/Planned）。
+    2. **路由架构解耦**：将原 `home_page.dart` 重命名为 `feature_page.dart` (类名改为 `FeaturePage`)，定位为“功能演示/实验区”。在 `main.dart` 中将初始路由切换为 `LandingPage`。
+    3. **视觉风格标准化**：在 `main.dart` 为 `MaterialApp` 配置了完整的深色主题（Material 3 Dark Theme），统一了应用在桌面端与 Web 端的视觉基调，并移除了代码中过时的 `withOpacity`（改为 `.withValues`）并精修了 `const` 约束。
+- 2026-03-15 [ui-adaptive-dashboard]:
+  - 问题现象：应用主页需要面向未来支持手机、平板、宽带桌面端的多端自由缩放与扩展。原有固定比例的 `Column` 或粗糙的横竖屏切换在添加更多窗格时会导致严重的宽度挤压；并且在宽平台快速 Resize 窗口时，底层（如 Rust）的异步日志上报会导致 Flutter 在进行 Layout 测量时触发严重的同步撞帧（`setState called during build`）崩溃报错。
+  - 解决方案：在 `home_page.dart` 与对应的 View Model 进行了系统级的终极自适应架构重构：
+    1. **三层跨端宽度断点 (Breakpoints)**：
+       - **大屏 (>= 900)**：左主区 + 右侧栏架构，主侧区宽度死锁为强对抗性的 `7:3` 比例，同时内部通过各子 Pane 的垂直 `flex` 权重计算高度，保护大视界展现。
+       - **中屏 (600-900)**：自动折行的双列网格布局。当窗格超过两个时自动折行（Row nesting），并利用所在行的最大权重面版动态顶起当前行的弹性行高（`rowFlex`）。
+       - **小屏 (< 600)**：小屏幕回归安全的单列垂直堆叠。
+    2. **完全解耦的数据组件**：提取了 `AdaptivePane` 泛型实体和壳组件 `_AdaptiveDashboardLayout`，主页只需在 `panes: [...]` 中塞入积木面版及预期弹性比重，壳组件会自动完成测量、截断和精准绘制多端各向分割线。
+    3. **微任务状态解耦 (Microtask Decoupling)**：将 `_LogListPanel` 精简为无生命周期包袱的 `StatelessWidget + ListenableBuilder`；在 `LogViewModel.dart` 中，将向上抛出给 UI 层的同步 `notifyListeners()` 强行推迟到当前布局帧结束后的微任务队列（`Future.microtask(...)`）中。这彻底断绝了快速改变窗口大小导致底层数据频繁 Layout 发出的框架测算重绘冲突（Frame racing），实现极简轻量的页面流自适应安全更新机制。
+- 2026-03-15 [ui-mvvm-refactor]:
+  - 问题现象：用户要求遵循 MVVM 原则，剥离 `ImuViewModel` 中直接调用 Rust API 的逻辑，并将新增的 `ImuPage` 与原来的日志视图集成到同一个页面中，同时保持 `main.dart` 轻量。
+  - 执行命令与依赖变更：
+    - 运行 `flutter pub add provider` 引入 provider 库作为状态管理（UI 根据数据状态重绘）。
+  - 解决方案：
+    - 新增 `lib/data/imu/imu_repository.dart` 并将 `updateAhrs` 和 `initAhrs` 的底层 Rust 调用迁移至此。
+    - 将 `ImuViewModel` 的依赖从 Rust API 改为 `ImuRepository.instance`。
+    - 新增 `lib/ui/home/home_page.dart`，将独立的 `ImuPage` 作为组件嵌入上半部分，并在下半部分拆分并嵌入了实时日志输出列表，使得 `MainNavigation` 可以被删除。
+- 2026-03-15 [imu-comparison-view]:
+  - 问题现象：需要验证从 Flutter UI 层一路打通到 Rust 底层的交互全链路，要求在 `LogPage` 点击刷新按钮时，先由 `LogViewModel` 在 Flutter 侧输出一条“点击了日志刷新按钮”，再触发 Rust 输出一条带有具体行号的“rust 调用成功”日志，最终双双展示在 UI 流上。后续增加了实现设备姿态流 (Dart vs Rust) 的实时分屏对比实验页面，并在后台通过 `flutter_rust_bridge_codegen generate --watch` 自动维护双端绑定。
+  - 执行命令与依赖变更：
+    - Flutter 端获取传感器数据：运行 `flutter pub add sensors_plus` 引入 IMU 流读取能力。
+    - Rust 端传感器融合过滤算法：运行 `cargo add ahrs nalgebra` 引入 Madgwick 滤波器及所需的高性能矩阵计算依赖。
+  - 解决方案：遵循了单向依赖与数据流原则（View → ViewModel → Repository）。首先在 `lib/main.dart` 补充了应用启动日志。接着在 `LogPage` AppBar 增加 IconButton 调用 `_viewModel.refreshLogs()`；在 `LogViewModel` 发送“点击事件”给 `LogRepository` 打印。随后 `LogViewModel` 调用了由 FFI 暴露的 Rust 接口 `triggerRefreshLog()`；其对应的 Rust 原生函数定义于 `rust/src/api/simple.rs`，并在内部通过 `log_from_rust` 推送“rust 调用成功”。之后开始构建 `ImuPage` 以展示横向和纵向传感器读数差异测试，测试表明 FFI 生成即时生效，跨端通信基建非常坚固。
 - 2026-03-13 [clock-page]:
   - 问题现象：需要一个简单但直观的 Flutter 页面来作为基础 UI 验证和后续交互实验的载体。
   - 解决方案：在 `lib/main.dart` 中实现 `ClockPage`（StatefulWidget + Timer），作为应用首页（`MyApp` 的 `home`）；`ClockPage` 使用 `Timer.periodic` 每秒更新当前时间，在全黑背景上居中显示大号的 `HH:MM:SS` 和当天日期 `YYYY-MM-DD`，用于验证状态更新、重绘性能和基础 UI 管线工作正常。

@@ -48,7 +48,10 @@ class LogRepository {
   /// 从 Rust 侧来的日志（LogEntry）转成统一格式并记录
   void _addRustLog(LogEntry entry) {
     final ts = _formatTimestamp(
-      DateTime.fromMillisecondsSinceEpoch(entry.timeMillis.toInt(), isUtc: true),
+      DateTime.fromMillisecondsSinceEpoch(
+        entry.timeMillis.toInt(),
+        isUtc: true,
+      ),
     );
     final levelLabel = _levelLabelFromInt(entry.level);
     final line = '[$ts][Rust][$levelLabel][${entry.tag}] ${entry.msg}';
@@ -108,4 +111,3 @@ class LogRepository {
     await _rustSub?.cancel();
   }
 }
-

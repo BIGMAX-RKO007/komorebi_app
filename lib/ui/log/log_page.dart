@@ -58,10 +58,7 @@ class _LogPageState extends State<LogPage> {
       ),
       body: logs.isEmpty
           ? const Center(
-              child: Text(
-                '暂无日志输出',
-                style: TextStyle(color: Colors.white54),
-              ),
+              child: Text('暂无日志输出', style: TextStyle(color: Colors.white54)),
             )
           : ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -84,4 +81,3 @@ class _LogPageState extends State<LogPage> {
     );
   }
 }
-

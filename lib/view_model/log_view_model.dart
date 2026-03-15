@@ -8,7 +8,12 @@ class LogViewModel extends ChangeNotifier {
     _logs = List<String>.from(_repository.logs.value);
     _listener = () {
       _logs = List<String>.from(_repository.logs.value);
-      notifyListeners();
+      // 关键修复：将 UI 重建请求推迟到当前帧的布局/构建周期之后
+      // 避免由于窗口 resize 触发 LayoutBuilder 重建时，恰好碰上底层日志更新
+      // 从而引发 "setState() or markNeedsBuild() called during build" 的红屏报错
+      Future.microtask(() {
+        notifyListeners();
+      });
     };
     _repository.logs.addListener(_listener);
   }
@@ -42,4 +47,3 @@ class LogViewModel extends ChangeNotifier {
     super.dispose();
   }
 }
-
