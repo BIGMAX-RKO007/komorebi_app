@@ -23,12 +23,14 @@ komorebi_app/                    # 项目根目录
 │   │   └── log/
 │   │       └── log_repository.dart # 【可编辑】日志数据层，管理日志流与内存存储
 │   ├── ui/
+│   │   ├── landing/
+│   │   │   └── landing_page.dart    # 【可编辑】应用入口页/引导页，包含品牌介绍与能力状态板
 │   │   ├── home/
-│   │   │   └── home_page.dart    # 【可编辑】主页，整合了 IMU 对比看板与日志面板
+│   │   │   └── feature_page.dart    # 【可编辑】核心展示页，整合了 IMU 对比看板与日志面板
 │   │   ├── imu/
-│   │   │   └── imu_page.dart     # 【可编辑】IMU 对比看板 UI 组件
+│   │   │   └── imu_page.dart        # 【可编辑】IMU 对比看板 UI 组件
 │   │   └── log/
-│   │       └── log_page.dart     # 【可编辑】原极简日志展示页面（已拆分到主页复用）
+│   │       └── log_page.dart        # 【可编辑】原极简日志展示页面（已拆分到展示页复用）
 │   ├── view_model/
 │   │   ├── imu_view_model.dart   # 【可编辑】IMU 数据流状态管理，遵循 MVVM 仅调用 Repository
 │   │   └── log_view_model.dart   # 【可编辑】日志逻辑层，对接 UI 和 Repository 触发 Rust
@@ -46,8 +48,9 @@ komorebi_app/                    # 项目根目录
 │       ├── lib.rs                # 【可编辑】仅声明模块：pub mod api; mod frb_generated;
 │       ├── frb_generated.rs      # 生成代码，勿手改
 │       └── api/
-│           ├── mod.rs            # 【可编辑】声明子模块，如 pub mod simple;
-│           └── simple.rs         # 【可编辑】日志（LogEntry、create_log_stream、log_from_rust）、greet、mayFail 等
+│   │           ├── mod.rs            # 【可编辑】声明子模块，如 pub mod simple, imu;
+│   │           ├── simple.rs         # 【可编辑】日志流（LogEntry, create_log_stream）、greet、mayFail 等
+│   │           └── imu.rs            # 【可编辑】IMU 相关 API，包含姿态解算推送流（create_imu_stream）
 │
 ├── rust_builder/                 # 将 Rust 编译为各平台动态库的 Flutter 插件封装
 │   ├── pubspec.yaml              # 声明插件，供主工程依赖
@@ -79,9 +82,9 @@ komorebi_app/                    # 项目根目录
 | 层级 | 职责 | 主要可编辑文件 |
 |------|------|----------------|
 | 根配置 | 应用依赖、FRB 代码生成配置、项目说明 | `pubspec.yaml`, `flutter_rust_bridge.yaml`, `MEMORY.md` |
-| Flutter UI/逻辑 | 入口、日志与异常、页面与业务调用 Rust | `lib/main.dart` |
+| Flutter UI/逻辑 | 入口引导、全局异常、业务页面与自适应布局 | `lib/main.dart`, `lib/ui/landing/landing_page.dart`, `lib/ui/home/feature_page.dart` |
 | Dart–Rust 绑定 | 由 FRB 根据 Rust API 生成，供 Dart 调用 | `lib/src/rust/**`（仅通过改 Rust + codegen 更新） |
-| Rust 业务与基础设施 | 日志流、业务接口、可失败示例 | `rust/src/lib.rs`, `rust/src/api/mod.rs`, `rust/src/api/simple.rs` |
+| Rust 业务层 | 日志流、IMU 姿态解算、业务逻辑接口 | `rust/src/api/simple.rs`, `rust/src/api/imu.rs` |
 | Rust 构建与插件 | 各平台编译 Rust 并接入 Flutter | `rust_builder/**`（一般沿用模板即可） |
 | 各平台宿主 | 启动 Flutter、加载 Rust 动态库 | `android/`, `ios/`, `windows/`, `macos/`, `linux/`, `web/` |
 
