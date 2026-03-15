@@ -14,10 +14,7 @@ class LandingPage extends StatelessWidget {
           gradient: RadialGradient(
             center: Alignment.center,
             radius: 1.5,
-            colors: [
-              Colors.blue.withValues(alpha: 0.1),
-              Colors.black,
-            ],
+            colors: [Colors.blue.withValues(alpha: 0.1), Colors.black],
           ),
         ),
         child: Column(
@@ -37,7 +34,9 @@ class LandingPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
+                border: Border.all(
+                  color: Colors.blueAccent.withValues(alpha: 0.5),
+                ),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
@@ -96,7 +95,10 @@ class LandingPage extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 64,
+                  vertical: 20,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(0),
                 ),
@@ -128,10 +130,10 @@ class LandingPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isActive ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
-        border: Border.all(
-          color: isActive ? Colors.white24 : Colors.white10,
-        ),
+        color: isActive
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.transparent,
+        border: Border.all(color: isActive ? Colors.white24 : Colors.white10),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
@@ -143,13 +145,15 @@ class LandingPage extends StatelessWidget {
             decoration: BoxDecoration(
               color: isActive ? Colors.greenAccent : Colors.white10,
               shape: BoxShape.circle,
-              boxShadow: isActive ? [
-                BoxShadow(
-                  color: Colors.greenAccent.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                  spreadRadius: 1,
-                )
-              ] : [],
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: Colors.greenAccent.withValues(alpha: 0.5),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : [],
             ),
           ),
           const SizedBox(width: 10),

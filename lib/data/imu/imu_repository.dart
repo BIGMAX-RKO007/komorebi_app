@@ -21,13 +21,6 @@ class ImuRepository {
     required double gy,
     required double gz,
   }) {
-    return rust_imu.updateAhrs(
-      ax: ax,
-      ay: ay,
-      az: az,
-      gx: gx,
-      gy: gy,
-      gz: gz,
-    );
+    return rust_imu.updateAhrs(ax: ax, ay: ay, az: az, gx: gx, gy: gy, gz: gz);
   }
 }

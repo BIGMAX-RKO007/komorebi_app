@@ -49,14 +49,8 @@ class _FeaturePageState extends State<FeaturePage> {
       body: _AdaptiveDashboardLayout(
         // 这里可以自由增加新面板，自动根据屏幕宽度在 Row 和 Column 之间切换
         panes: [
-          const AdaptivePane(
-            flex: 6,
-            child: ImuPage(),
-          ),
-          AdaptivePane(
-            flex: 4,
-            child: _LogListPanel(viewModel: _logViewModel),
-          ),
+          const AdaptivePane(flex: 6, child: ImuPage()),
+          AdaptivePane(flex: 4, child: _LogListPanel(viewModel: _logViewModel)),
           // 未来只需在此处添加更多 AdaptivePane() 即可自动分配屏幕空间
         ],
       ),
@@ -69,10 +63,7 @@ class AdaptivePane {
   final Widget child;
   final int flex;
 
-  const AdaptivePane({
-    required this.child,
-    this.flex = 1,
-  });
+  const AdaptivePane({required this.child, this.flex = 1});
 }
 
 /// 统一的自适应仪表盘布局壳组件
@@ -82,14 +73,12 @@ class AdaptivePane {
 /// - 大屏幕 (>= 900)   -> 混合主次栏（左侧主图 + 右侧多个窗格纵列）
 class _AdaptiveDashboardLayout extends StatelessWidget {
   final List<AdaptivePane> panes;
-  
+
   // Material Design 推荐的断点
   final double mediumBreakpoint = 600.0;
   final double largeBreakpoint = 900.0;
 
-  const _AdaptiveDashboardLayout({
-    required this.panes,
-  });
+  const _AdaptiveDashboardLayout({required this.panes});
 
   @override
   Widget build(BuildContext context) {
@@ -115,9 +104,11 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
     final children = <Widget>[];
     for (int i = 0; i < panes.length; i++) {
       children.add(Expanded(flex: panes[i].flex, child: panes[i].child));
-      
+
       if (i < panes.length - 1) {
-        children.add(const Divider(color: Colors.white24, height: 1, thickness: 1));
+        children.add(
+          const Divider(color: Colors.white24, height: 1, thickness: 1),
+        );
       }
     }
     return Column(children: children);
@@ -131,9 +122,15 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
       final children = <Widget>[];
       for (int i = 0; i < panes.length; i++) {
         children.add(Expanded(flex: panes[i].flex, child: panes[i].child));
-        
+
         if (i < panes.length - 1) {
-          children.add(const VerticalDivider(color: Colors.white24, width: 1, thickness: 1));
+          children.add(
+            const VerticalDivider(
+              color: Colors.white24,
+              width: 1,
+              thickness: 1,
+            ),
+          );
         }
       }
       return Row(children: children);
@@ -144,17 +141,21 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
     for (int i = 0; i < panes.length; i += 2) {
       final isLastRowWithSingleItem = (i == panes.length - 1);
       final rowChildren = <Widget>[];
-      
+
       rowChildren.add(Expanded(flex: panes[i].flex, child: panes[i].child));
-      
+
       // 计算这一行应该占的高度权重 (取行内最大值)
       int rowFlex = panes[i].flex;
 
       if (!isLastRowWithSingleItem) {
-        rowChildren.add(const VerticalDivider(color: Colors.white24, width: 1, thickness: 1));
-        rowChildren.add(Expanded(flex: panes[i+1].flex, child: panes[i+1].child));
-        if (panes[i+1].flex > rowFlex) {
-           rowFlex = panes[i+1].flex;
+        rowChildren.add(
+          const VerticalDivider(color: Colors.white24, width: 1, thickness: 1),
+        );
+        rowChildren.add(
+          Expanded(flex: panes[i + 1].flex, child: panes[i + 1].child),
+        );
+        if (panes[i + 1].flex > rowFlex) {
+          rowFlex = panes[i + 1].flex;
         }
       }
 
@@ -166,7 +167,9 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
       );
 
       if (i + 2 < panes.length) {
-        columnChildren.add(const Divider(color: Colors.white24, height: 1, thickness: 1));
+        columnChildren.add(
+          const Divider(color: Colors.white24, height: 1, thickness: 1),
+        );
       }
     }
     return Column(children: columnChildren);
@@ -182,7 +185,7 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
     // 第一个为主要工作区，后续的面板组装为侧边状态栏
     final mainPane = panes.first;
     final sidebarPanes = panes.sublist(1);
-    
+
     // 主次区的宽度比例固定为 7:3，不再随侧栏组件数量无限增加而挤压主区
     const int mainWidthFlex = 7;
     const int sidebarWidthFlex = 3;
@@ -190,25 +193,28 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
     return Row(
       children: [
         // 左侧大主区
-        Expanded(
-          flex: mainWidthFlex,
-          child: mainPane.child,
-        ),
-        
+        Expanded(flex: mainWidthFlex, child: mainPane.child),
+
         const VerticalDivider(color: Colors.white24, width: 1, thickness: 1),
-        
+
         // 右侧小栏区，内部组件独立应用各自的高度比例
         Expanded(
           flex: sidebarWidthFlex,
           child: Column(
-            children: List<Widget>.generate(sidebarPanes.length * 2 - 1, (index) {
+            children: List<Widget>.generate(sidebarPanes.length * 2 - 1, (
+              index,
+            ) {
               if (index.isEven) {
                 final paneIndex = index ~/ 2;
                 final pane = sidebarPanes[paneIndex];
                 // 使用面板自带的高度 flex进行垂直分配
                 return Expanded(flex: pane.flex, child: pane.child);
               } else {
-                return const Divider(color: Colors.white24, height: 1, thickness: 1);
+                return const Divider(
+                  color: Colors.white24,
+                  height: 1,
+                  thickness: 1,
+                );
               }
             }),
           ),
@@ -221,7 +227,7 @@ class _AdaptiveDashboardLayout extends StatelessWidget {
 /// 拆分出的日志列表面板，不再独占一个 Scaffold
 class _LogListPanel extends StatelessWidget {
   final LogViewModel viewModel;
-  
+
   const _LogListPanel({required this.viewModel});
 
   @override
@@ -232,16 +238,13 @@ class _LogListPanel extends StatelessWidget {
       listenable: viewModel,
       builder: (context, child) {
         final logs = viewModel.logs;
-        
+
         if (logs.isEmpty) {
           return const Center(
-            child: Text(
-              '暂无日志输出',
-              style: TextStyle(color: Colors.white54),
-            ),
+            child: Text('暂无日志输出', style: TextStyle(color: Colors.white54)),
           );
         }
-        
+
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           itemCount: logs.length,

@@ -27,54 +27,58 @@ class _ImuView extends StatelessWidget {
         // 顶部的控制按钮
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 20.0),
-            child: ElevatedButton(
-              onPressed: vm.toggleStream,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: vm.isRunning ? Colors.red.shade900 : Colors.blue.shade900,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-              ),
-              child: Text(
-                vm.isRunning ? "停止采集 (Stop)" : "VS (开始对比)",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+          child: ElevatedButton(
+            onPressed: vm.toggleStream,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: vm.isRunning
+                  ? Colors.red.shade900
+                  : Colors.blue.shade900,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+            ),
+            child: Text(
+              vm.isRunning ? "停止采集 (Stop)" : "VS (开始对比)",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
-          
-          Expanded(
-            child: Row(
-              children: [
-                // 左侧 Dart 区域
-                Expanded(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      border: Border(right: BorderSide(color: Colors.white24, width: 2)),
-                    ),
-                    child: _buildPanel(
-                      title: "Dart (仅加速度计)",
-                      color: Colors.blueAccent,
-                      pitch: vm.dartPitch,
-                      roll: vm.dartRoll,
-                      yaw: null, 
+        ),
+
+        Expanded(
+          child: Row(
+            children: [
+              // 左侧 Dart 区域
+              Expanded(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      right: BorderSide(color: Colors.white24, width: 2),
                     ),
                   ),
-                ),
-                
-                // 右侧 Rust 区域
-                Expanded(
                   child: _buildPanel(
-                    title: "Rust (IMU 融合)",
-                    color: Colors.orangeAccent,
-                    pitch: vm.rustPitch,
-                    roll: vm.rustRoll,
-                    yaw: vm.rustYaw,
+                    title: "Dart (仅加速度计)",
+                    color: Colors.blueAccent,
+                    pitch: vm.dartPitch,
+                    roll: vm.dartRoll,
+                    yaw: null,
                   ),
                 ),
-              ],
-            ),
+              ),
+
+              // 右侧 Rust 区域
+              Expanded(
+                child: _buildPanel(
+                  title: "Rust (IMU 融合)",
+                  color: Colors.orangeAccent,
+                  pitch: vm.rustPitch,
+                  roll: vm.rustRoll,
+                  yaw: vm.rustYaw,
+                ),
+              ),
+            ],
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 
   Widget _buildPanel({
@@ -93,9 +97,16 @@ class _ImuView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(title, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 10),
-          
+
           // 动态方块，通过 Transform.rotate 粗略演示姿态变化
           // 这里仅用 roll 来旋转面板展示效果，更复杂的 3D 需要用到 Transform(Matrix4)
           Transform.rotate(
@@ -108,12 +119,18 @@ class _ImuView extends StatelessWidget {
                 border: Border.all(color: color, width: 2),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Center(child: Icon(Icons.phone_android, color: Colors.white70, size: 30)),
+              child: const Center(
+                child: Icon(
+                  Icons.phone_android,
+                  color: Colors.white70,
+                  size: 30,
+                ),
+              ),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // 数据读数展示
           _buildStatRow("Pitch (俯仰)", pDeg),
           _buildStatRow("Roll (横滚)", rDeg),
@@ -129,8 +146,18 @@ class _ImuView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 14)),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'monospace')),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white54, fontSize: 14),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontFamily: 'monospace',
+            ),
+          ),
         ],
       ),
     );

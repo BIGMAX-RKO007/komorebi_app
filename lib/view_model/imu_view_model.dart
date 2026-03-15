@@ -80,9 +80,9 @@ class ImuViewModel extends ChangeNotifier {
     // 为了使 Rust 算出的角度和 Dart 直观视觉匹配且不过滤掉正确的重力：
     // 陀螺仪的轴向也需要匹配
     final result = ImuRepository.instance.updateAhrs(
-      ax: _ax,     // X: Right -> X
-      ay: _ay,     // Y: Up -> Y
-      az: _az,     // Z: Out -> Z
+      ax: _ax, // X: Right -> X
+      ay: _ay, // Y: Up -> Y
+      az: _az, // Z: Out -> Z
       gx: _gx,
       gy: _gy,
       gz: _gz,

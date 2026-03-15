@@ -46,7 +46,7 @@ class MyApp extends StatelessWidget {
       fileAndLine: 'main.dart:45',
       message: '程序启动了',
     );
-    
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Komorebi',

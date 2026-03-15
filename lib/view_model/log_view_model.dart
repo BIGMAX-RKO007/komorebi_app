@@ -47,4 +47,3 @@ class LogViewModel extends ChangeNotifier {
     super.dispose();
   }
 }
-
