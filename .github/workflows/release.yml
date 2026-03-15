@@ -39,7 +39,6 @@ jobs:
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
       prerelease: ${{ steps.resolve.outputs.prerelease }}
-
     steps:
       - id: resolve
         shell: bash
@@ -61,10 +60,234 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
-         
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            aarch64-linux-android,
+            armv7-linux-androideabi,
+            x86_64-linux-android,
+            i686-linux-android
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-android-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: cargo-android-
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties') }}
+          restore-keys: gradle-
+      - run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+      - run: flutter_rust_bridge_codegen generate
+      - run: flutter pub get
+
+  web:
+    name: Release Web
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-web-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: cargo-web-
+      - run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+      - run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+      - run: flutter_rust_bridge_codegen generate
+      - run: flutter_rust_bridge_codegen build-web
+      - run: flutter pub get
+      - run: flutter build web --release
+      - name: Archive Web build
+        run: |
+          mkdir -p dist
+          tar -czf dist/komorebi-web.tar.gz -C build web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-web
+          path: dist/komorebi-web.tar.gz
+          retention-days: 14
+
+  linux:
+    name: Release Linux
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - run: flutter pub get
+      - run: flutter build linux --release
+
+  windows:
+    name: Release Windows
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Archive Windows bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/komorebi-windows-x64.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist/komorebi-windows-x64.zip
+          retention-days: 14
+
+  macos:
+    name: Release macOS
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter build macos --release
+      - name: Archive macOS app
+        shell: bash
+
+  ios:
+    name: Release iOS
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: cargo-ios-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
+          restore-keys: cargo-ios-
+      - uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: pods-
+      - run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
+      - run: flutter_rust_bridge_codegen generate
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign
+      - name: Archive Runner.app
+
+  publish:
+    name: Publish GitHub Release
+    needs: [should-release, android, web, linux, windows, macos, ios]
+    if: always() && (needs.should-release.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.should-release.outputs.tag }}
+          name: Komorebi App - ${{ needs.should-release.outputs.tag }}
+          target_commitish: ${{ github.event.workflow_run.head_commit.id }}
+          prerelease: ${{ needs.should-release.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            release-assets/**/*.apk
+            release-assets/**/*.aab
+            release-assets/**/*.zip
+            release-assets/**/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app dist/komorebi-ios-runner-app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-ios
+          path: dist/komorebi-ios-runner-app.zip
+          retention-days: 14
+        run: |
+          mkdir -p dist
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -n 1)
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" dist/komorebi-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: dist/komorebi-macos.zip
+          retention-days: 14
+      - name: Archive Linux bundle
+        run: |
+          mkdir -p dist
+          tar -czf dist/komorebi-linux-x64.tar.gz -C build/linux/x64/release bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: dist/komorebi-linux-x64.tar.gz
+          retention-days: 14
+      - run: flutter build apk --release --split-per-abi
+      - run: flutter build appbundle --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android-apks
+          path: build/app/outputs/flutter-apk/*-release.apk
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android-aab
+          path: build/app/outputs/bundle/release/*.aab
+          retention-days: 14
