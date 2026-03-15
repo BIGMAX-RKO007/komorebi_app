@@ -7,9 +7,11 @@ on:
       - 'lib/**'
       - 'web/**'
       - 'rust/**'
+      - 'assets/**'
       - 'pubspec.yaml'
       - 'pubspec.lock'
       - '.github/workflows/cd.yml'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 concurrency:

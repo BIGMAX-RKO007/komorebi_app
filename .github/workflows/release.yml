@@ -35,6 +35,7 @@ jobs:
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
+
     steps:
       - id: meta
         shell: bash
@@ -52,6 +53,7 @@ jobs:
     needs: meta
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     steps:
       - uses: actions/checkout@v4
 
@@ -113,6 +115,7 @@ jobs:
     needs: meta
     runs-on: ubuntu-latest
     timeout-minutes: 35
+
     steps:
       - uses: actions/checkout@v4
 
@@ -157,6 +160,7 @@ jobs:
     needs: meta
     runs-on: ubuntu-latest
     timeout-minutes: 35
+
     steps:
       - uses: actions/checkout@v4
 
@@ -185,6 +189,7 @@ jobs:
     needs: meta
     runs-on: windows-latest
     timeout-minutes: 45
+
     steps:
       - uses: actions/checkout@v4
 
@@ -213,6 +218,7 @@ jobs:
     needs: meta
     runs-on: macos-latest
     timeout-minutes: 45
+
     steps:
       - uses: actions/checkout@v4
 
@@ -242,6 +248,7 @@ jobs:
     needs: meta
     runs-on: macos-latest
     timeout-minutes: 60
+
     steps:
       - uses: actions/checkout@v4
 
@@ -290,6 +297,7 @@ jobs:
     name: Publish GitHub Release
     needs: [meta, android, web, linux, windows, macos, ios]
     runs-on: ubuntu-latest
+
     steps:
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
