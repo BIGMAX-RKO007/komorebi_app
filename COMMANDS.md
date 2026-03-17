@@ -148,3 +148,24 @@
    - iOS（如需要）：`flutter build ios --release`  
 
 ***
+查看 flutter_rust_bridge 命令有什么
+dart pub deps flutter_rust_bridge
+(base) PS C:\Users\FX\IdeaProjects\komorebi_app_cursor\komorebi_app> dart pub deps flutter_rust_bridge
+Command "deps" does not take any arguments.
+
+Usage: dart pub deps [arguments...]
+-h, --help               Print this usage information.
+-s, --style              How output should be displayed.
+                         [compact, tree (default), list]
+    --[no-]dev           Whether to include dev dependencies.
+                         (defaults to on)
+    --executables        List all available executables.
+    --json               Output dependency information in a json format.
+-C, --directory=<dir>    Run this in the directory <dir>.
+
+Run "dart help" to see global options.
+See https://dart.dev/tools/pub/cmd/pub-deps for detailed documentation.
+(base) PS C:\Users\FX\IdeaProjects\komorebi_app_cursor\komorebi_app> 
+
+flutter run -d chrome --verbose
+flutter run -d chrome --web-header=Cross-Origin-Opener-Policy=same-origin --web-header=Cross-Origin-Embedder-Policy=require-corp

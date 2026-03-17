@@ -256,6 +256,16 @@ await setupRustLogging();
   - Dart 侧通过 `createLogStream().listen(...)` 接收 `LogEntry`，在 `setupRustLogging` 中统一映射为 `appLog(time: ..., layer: 'Rust', level: _levelLabelFromInt(event.level), fileAndLine: event.tag, message: event.msg)`。
 
 # Timeline & Progress
+- 2026-03-17 [debug-web-panic]:
+  - 问题现象：Flutter Web 端在浏览器中运行（python http.server）时出现白屏，控制台报错 `RuntimeError: unreachable`，且未见 "Rust WASM initialized!" 日志。
+  - 诊断过程：
+    1. **使用 Browser Agent 检查**：确认关键静态资源（JS, WASM）加载正常（200 OK），排除了 404 或 MIME 类型配置问题。
+    2. **控制台日志分析**：在开发者工具中捕获到报错堆栈指向 `rust_lib_komorebi_app_bg.wasm`。错误表现为 WASM 级的 `unreachable` 指令，这在 Rust WASM 中通常对应于 `panic`。
+    3. **源码排查**：定位到 `rust/src/api/simple.rs` 中使用了 `SystemTime::now()`。标准 WASM 环境（非 WASI）不具备系统时钟支持，调用此 API 会直接触发 panic。
+  - 解决方案与进展：
+    1. **增强 Flutter 侧异常捕获**：在 `lib/main.dart` 的 `runZonedGuarded` 基础上，针对 `RustLib.init()` 增加了显式的 `try-catch` 块，确保在 WASM 初始化失败时能打印出具体的 Dart 异常及堆栈，而非仅仅是静默白屏。
+    2. **制定 Rust 修复计划**：已在 `implementation_plan.md` 中记录修复方案，拟将日志中的时间戳获取改为 WASM 兼容方式（如使用 `js-sys` 获取浏览器时间）或暂时移除。
+
 - 2026-03-15 [ui-landing-entry]:
   - 问题现象：项目需要上线 Web 平台，直接进入功能实验页（原 `HomePage`）缺乏品牌感知和引导。需要一个具备“游戏启动页”风格的入口，向访问者介绍项目目标、当前开发状态，并提供清晰的进入路径。
   - 解决方案：实施了 Web 导向的首页重构方案：
@@ -302,7 +312,9 @@ await setupRustLogging();
 # TODO / Next Steps
 
 ## 当前迭代
-- [ ] 当前迭代要做的事情
+- [ ] 修复 Rust WASM `SystemTime::now()` 导致的 panic <!-- id: iter_fix_panic -->
+- [ ] 验证 Web 端在正确处理异常后能显示基本 UI <!-- id: iter_verify_web -->
 
 ## Backlog / 未来计划
-- [ ] 未来计划
+- [ ] 集成 `js_sys` 或其他 WASM 兼容的时间库 <!-- id: backlog_wasm_time -->
+- [ ] 优化 Web 端 COOP/COEP 头的自动化配置 <!-- id: backlog_web_headers -->

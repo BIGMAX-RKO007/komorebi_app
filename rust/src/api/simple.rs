@@ -24,10 +24,15 @@ pub fn create_log_stream(sink: StreamSink<LogEntry>) {
 
 /// 在 Rust 侧方便调用的统一日志入口
 pub fn log_from_rust(level: i32, tag: &str, msg: &str) {
+    // WASM does not support SystemTime::now() without extra bits.
+    // Use 0 for now to avoid panics. 
+    let time_millis = 0;
+    /*
     let time_millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
+    */
 
     let entry = LogEntry {
         time_millis,

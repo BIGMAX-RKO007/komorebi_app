@@ -19,13 +19,23 @@ Future<void> main() async {
       };
 
       // 初始化 RustLib（包括 flutter_rust_bridge 的内部状态）
-      await RustLib.init();
-      // 设置 Rust -> Dart 的日志通道（Repository 内部订阅 Rust Stream）
-      await LogRepository.instance.initRustLogging();
+      try {
+        await RustLib.init();
+        // 设置 Rust -> Dart 的日志通道（Repository 内部订阅 Rust Stream）
+        await LogRepository.instance.initRustLogging();
+      } catch (e, s) {
+        debugPrint('Rust initialization failed: $e\n$s');
+        LogRepository.instance.logFlutter(
+          level: 'ERROR',
+          fileAndLine: 'main.dart:RustInit',
+          message: 'Rust initialization failed: $e\n$s',
+        );
+      }
       runApp(const MyApp());
     },
     (error, stack) {
       // 兜底：捕获 zone 内未被处理的异常
+      debugPrint('Caught error in runZonedGuarded: $error\n$stack');
       LogRepository.instance.logFlutter(
         level: 'ERROR',
         fileAndLine: 'main.dart:main',
