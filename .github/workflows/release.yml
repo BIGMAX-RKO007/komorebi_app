@@ -1,9 +1,12 @@
-name: Release
+name: Release - Auto Publish
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag_name:
@@ -29,44 +32,44 @@ env:
   FRB_VERSION: '2.11.1'
 
 jobs:
-  meta:
-    name: Resolve release metadata
+  should-release:
+    name: Should Release?
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     outputs:
-      tag: ${{ steps.meta.outputs.tag }}
-      prerelease: ${{ steps.meta.outputs.prerelease }}
-
+      tag: ${{ steps.resolve.outputs.tag }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
     steps:
-      - id: meta
+      - id: resolve
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
             echo "prerelease=${{ inputs.prerelease }}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            run_id="${{ github.event.workflow_run.id }}"
+            commit_sha="${{ github.event.workflow_run.head_commit.id }}"
+            echo "tag=auto-${run_id}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
           fi
 
   android:
     name: Release Android
-    needs: meta
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: >-
@@ -74,7 +77,6 @@ jobs:
             armv7-linux-androideabi,
             x86_64-linux-android,
             i686-linux-android
-
       - uses: actions/cache@v4
         with:
           path: |
@@ -83,51 +85,44 @@ jobs:
             rust/target
           key: cargo-android-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
           restore-keys: cargo-android-
-
       - uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties') }}
+          key: gradle-${{ hashFiles('android/**/\*.gradle\*', 'android/gradle.properties') }}
           restore-keys: gradle-
-
       - run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
       - run: flutter_rust_bridge_codegen generate
       - run: flutter pub get
       - run: flutter build apk --release --split-per-abi
       - run: flutter build appbundle --release
-
       - uses: actions/upload-artifact@v4
         with:
           name: release-android-apks
           path: build/app/outputs/flutter-apk/*-release.apk
           retention-days: 14
-
       - uses: actions/upload-artifact@v4
         with:
           name: release-android-aab
-          path: build/app/outputs/bundle/release/*.aab
+          path: build/app/outputs/bundle/release/\*.aab
           retention-days: 14
 
   web:
     name: Release Web
-    needs: meta
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-
       - uses: actions/cache@v4
         with:
           path: |
@@ -136,19 +131,16 @@ jobs:
             rust/target
           key: cargo-web-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
           restore-keys: cargo-web-
-
       - run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
       - run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
       - run: flutter_rust_bridge_codegen generate
       - run: flutter_rust_bridge_codegen build-web
       - run: flutter pub get
       - run: flutter build web --release
-
       - name: Archive Web build
         run: |
           mkdir -p dist
           tar -czf dist/komorebi-web.tar.gz -C build web
-
       - uses: actions/upload-artifact@v4
         with:
           name: release-web
@@ -157,27 +149,23 @@ jobs:
 
   linux:
     name: Release Linux
-    needs: meta
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
       - run: flutter pub get
       - run: flutter build linux --release
-
       - name: Archive Linux bundle
         run: |
           mkdir -p dist
           tar -czf dist/komorebi-linux-x64.tar.gz -C build/linux/x64/release bundle
-
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux
@@ -186,27 +174,23 @@ jobs:
 
   windows:
     name: Release Windows
-    needs: meta
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     timeout-minutes: 45
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-
       - run: flutter pub get
       - run: flutter build windows --release
-
       - name: Archive Windows bundle
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath dist/komorebi-windows-x64.zip -Force
-
+          Compress-Archive -Path build/windows/x64/runner/Release/\* -DestinationPath dist/komorebi-windows-x64.zip -Force
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows
@@ -215,28 +199,24 @@ jobs:
 
   macos:
     name: Release macOS
-    needs: meta
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: macos-latest
     timeout-minutes: 45
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-
       - run: flutter pub get
       - run: flutter build macos --release
-
       - name: Archive macOS app
         shell: bash
         run: |
           mkdir -p dist
-          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -n 1)
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "\*.app" | head -n 1)
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" dist/komorebi-macos.zip
-
       - uses: actions/upload-artifact@v4
         with:
           name: release-macos
@@ -245,22 +225,19 @@ jobs:
 
   ios:
     name: Release iOS
-    needs: meta
+    needs: should-release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: macos-latest
     timeout-minutes: 60
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
-
       - uses: actions/cache@v4
         with:
           path: |
@@ -269,24 +246,20 @@ jobs:
             rust/target
           key: cargo-ios-${{ hashFiles('rust/Cargo.lock', 'rust/Cargo.toml') }}
           restore-keys: cargo-ios-
-
       - uses: actions/cache@v4
         with:
           path: ios/Pods
           key: pods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: pods-
-
       - run: cargo install flutter_rust_bridge_codegen --version ${{ env.FRB_VERSION }}
       - run: flutter_rust_bridge_codegen generate
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
-
       - name: Archive Runner.app
         shell: bash
         run: |
           mkdir -p dist
           ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app dist/komorebi-ios-runner-app.zip
-
       - uses: actions/upload-artifact@v4
         with:
           name: release-ios
@@ -295,27 +268,26 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [meta, android, web, linux, windows, macos, ios]
+    needs: [should-release, android, web, linux, windows, macos, ios]
+    if: always() && (needs.should-release.result == 'success')
     runs-on: ubuntu-latest
-
     steps:
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.meta.outputs.tag }}
-          name: ${{ needs.meta.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          prerelease: ${{ needs.meta.outputs.prerelease }}
+          tag_name: ${{ needs.should-release.outputs.tag }}
+          name: Komorebi App - ${{ needs.should-release.outputs.tag }}
+          target_commitish: ${{ github.event.workflow_run.head_commit.id }}
+          prerelease: ${{ needs.should-release.outputs.prerelease }}
           generate_release_notes: true
           files: |
-            release-assets/**/*.apk
-            release-assets/**/*.aab
-            release-assets/**/*.zip
-            release-assets/**/*.tar.gz
+            release-assets/**/\*.apk
+            release-assets/**/\*.aab
+            release-assets/**/\*.zip
+            release-assets/**/\*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
